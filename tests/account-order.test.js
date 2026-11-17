@@ -1,0 +1,43 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {JSDOM} from 'jsdom';
+import {emptyConfig,sanitizeConfig,sanitizeProfile,groupProfilesByAccount,searchProfiles,mergeCandidates} from '../src/core/model.js';
+import {accountKey,moveAccount,sortAccounts} from '../src/core/account-order.js';
+import {exportJSON,parseJSON} from '../src/core/imports.js';
+import {createAccountReordering} from '../src/ui/account-reordering.js';
+const portal='https://example.awsapps.com/start/';
+const profiles=['Alpha','Bravo','Charlie','Hidden'].map((accountName,i)=>sanitizeProfile({portalId:portal,accountId:String(111122223330+i),permissionSet:'Developer',accountName,showInPopup:i!==3}));
+const config=()=>({...emptyConfig(),portals:[{id:portal}],profiles:structuredClone(profiles)});
+const order=c=>sortAccounts(groupProfilesByAccount(searchProfiles(c.profiles)),c).map(g=>g.key);
+test('account moves preserve roles, hidden accounts, metadata and JSON/sync order',()=>{
+  let c=config();const second=sanitizeProfile({...profiles[1],permissionSet:'ReadOnly'});c.profiles.push(second);
+  const before=structuredClone(c.profiles);c=moveAccount(c,{sourceKey:accountKey(profiles[1]),targetKey:accountKey(profiles[2]),position:'after'});
+  assert.deepEqual(order(c),[profiles[0],profiles[2],profiles[1],profiles[3]].map(accountKey));assert.deepEqual(c.profiles,before);
+  assert.equal(groupProfilesByAccount(c.profiles).find(g=>g.key===accountKey(profiles[1])).profiles.length,2);
+  const synced=mergeCandidates(c,c.profiles,{portalId:portal,complete:true});assert.deepEqual(order(parseJSON(exportJSON(synced)).config),order(c));
+  assert.deepEqual(sanitizeConfig({...c,ui:{}}).ui.accountOrder,[]);
+});
+test('legacy pin flags do not restrict moves; bad destinations and overlapping portals stay safe',()=>{
+  let c=config();c.profiles[0].favorite=true;
+  c=moveAccount(c,{sourceKey:accountKey(profiles[1]),targetKey:accountKey(profiles[0]),position:'before'});assert.equal(order(c)[0],accountKey(profiles[1]));
+  assert.throws(()=>moveAccount(c,{sourceKey:'missing',targetKey:accountKey(profiles[1]),position:'after'}),/different saved accounts/);
+  const other=sanitizeProfile({...profiles[1],portalId:'https://other.awsapps.com/start/'});c.portals.push({id:other.portalId});c.profiles.push(other);
+  c=moveAccount(c,{sourceKey:accountKey(other),targetKey:accountKey(profiles[1]),position:'before'});
+  assert.notEqual(order(c)[0],accountKey(profiles[0]));assert.ok(order(c).indexOf(accountKey(other))<order(c).indexOf(accountKey(profiles[1])));
+  for(const value of [42,['bad'],[JSON.stringify([portal,'invalid'])],[null]])assert.throws(()=>sanitizeConfig({...c,ui:{...c.ui,accountOrder:value}}),/Invalid account order/);
+});
+test('native drag handlers accept header drags only, show drop placement and cancel safely',async()=>{
+  const dom=new JSDOM('<main><fieldset><legend>Alpha</legend><div>Role</div></fieldset><fieldset><legend>Bravo</legend><div>Role</div></fieldset></main>');
+  const doc=dom.window.document,groups=[...doc.querySelectorAll('fieldset')],moves=[];let ended=0;
+  const controller=createAccountReordering({getGroups:()=>[{key:'a'},{key:'b'}],move:async change=>moves.push(change),onEnd:()=>ended++});
+  controller.beginRender();groups.forEach((g,i)=>controller.attach(g,g.querySelector('legend'),{key:i?'b':'a'}));
+  const fire=(target,type,y=0)=>{const event=new dom.window.Event(type,{bubbles:true,cancelable:true});Object.defineProperties(event,{clientY:{value:y},dataTransfer:{value:{setData(){},setDragImage(){}}}});target.dispatchEvent(event);return event;};
+  fire(groups[1],'drop',10);assert.equal(moves.length,0);
+  fire(groups[0].querySelector('div'),'dragstart');assert.equal(controller.dragging,false);
+  fire(groups[0].querySelector('legend'),'dragstart');assert.equal(controller.dragging,true);
+  fire(groups[1],'dragover',10);assert.equal(groups[1].classList.contains('drop-after'),true);
+  fire(groups[1],'drop',10);await new Promise(r=>setImmediate(r));assert.deepEqual(moves,[{sourceKey:'a',targetKey:'b',position:'after'}]);
+  fire(groups[0].querySelector('legend'),'dragend');assert.equal(ended,0);assert.equal(groups[1].classList.contains('drop-after'),false);
+  fire(groups[0].querySelector('legend'),'dragstart');fire(groups[0].querySelector('legend'),'dragend');assert.equal(ended,1);assert.equal(controller.dragging,false);
+  dom.window.close();
+});

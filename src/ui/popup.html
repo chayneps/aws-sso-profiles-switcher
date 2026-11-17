@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" class="popup-document">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AWS SSO Profiles Switcher</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="popup.css"></head>
+<body class="popup">
+<header class="popup-header">
+  <div class="brand"><img class="brand-icon" src="icons/128.png" width="30" height="30" alt=""><strong>AWS SSO Profiles<br>Switcher</strong></div>
+  <div class="popup-toolbar" role="group" aria-label="Profile actions">
+    <button id="toggle-search" class="icon-button" aria-label="Search profiles" title="Search profiles (Ctrl/⌘ K)" aria-expanded="false" aria-controls="search-panel">
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+    </button>
+    <button id="sync" class="icon-button" aria-label="Synchronise profiles" title="Synchronise profiles" aria-controls="sync-panel">
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.5-1L20 9M4 15l2.4 3A7 7 0 0 0 17.9 17"/></svg>
+    </button>
+    <button id="manage" class="icon-button" aria-label="Manage profiles" title="Manage profiles">
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m9 3-.5 2.1-1.7 1-2.1-.6L2 10l1.6 1.5v2L2 15l2.7 4.5 2.1-.6 1.7 1L9 22h6l.5-2.1 1.7-1 2.1.6L22 15l-1.6-1.5v-2L22 10l-2.7-4.5-2.1.6-1.7-1L15 3Z"/></svg>
+    </button>
+  </div>
+</header>
+<section id="search-panel" class="popup-search-panel" hidden>
+  <label class="sr-only" for="search">Search accounts or roles</label>
+  <div class="search-box"><input id="search" type="search" placeholder="Search accounts or roles" autocomplete="off"></div>
+</section>
+<section id="sync-panel" class="popup-sync-panel" aria-label="Choose portal to synchronise" hidden>
+  <label for="portal-picker">Access portal</label><div><select id="portal-picker"></select><button id="sync-selected" class="button primary">Synchronise</button></div>
+</section>
+<main class="popup-main">
+  <section id="multi-session" aria-label="AWS multi-session prerequisite" aria-live="polite" hidden></section>
+  <section id="portal-alerts" aria-label="Portal synchronisation status" aria-live="polite" hidden></section>
+  <p id="status" class="notice" role="status" hidden></p>
+  <div id="list-heading" class="list-heading"><span class="profiles-heading">PROFILES <span id="count" aria-live="polite">Loading…</span></span><button id="session-count" class="session-count" aria-expanded="false" aria-haspopup="dialog" aria-controls="session-panel" aria-live="polite">Checking sessions…</button></div>
+  <div id="profiles" class="account-groups"></div><div id="empty" class="empty" hidden></div>
+</main>
+<section id="session-panel" class="session-panel" role="dialog" aria-labelledby="session-panel-title" tabindex="-1" hidden><div class="session-panel-header"><h2 id="session-panel-title">Active sessions</h2><button id="close-sessions" type="button" class="text-button" aria-label="Close session list">×</button></div><p class="session-help">Hover a session dot to close it. Signing out affects all tabs for that session.</p><div id="session-list"></div></section>
+<script type="module" src="popup.js"></script>
+</body></html>

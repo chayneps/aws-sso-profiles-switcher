@@ -1,0 +1,19 @@
+{
+  "name": "aws-sso-profiles",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local AWS IAM Identity Center profile picker for Chrome",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test",
+    "preview": "node scripts/preview.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12",
+    "jsdom": "^26.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
