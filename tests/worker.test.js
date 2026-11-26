@@ -5,16 +5,17 @@ import {emptyConfig,sanitizeProfile} from '../src/core/model.js';
 const memory={local:{},session:{}};
 const listeners={message:[],removed:[],updated:[],startup:[],alarms:[]};
 const event=key=>({addListener:fn=>listeners[key].push(fn)});
-let openTabs=[],created=[],focused=[],scriptIdentity=null,scriptModes={},portalReads={},groups=[],groupCalls=[],granted=true,alarmState=new Map();
+let openTabs=[],created=[],focused=[],reloaded=[],scriptIdentity=null,scriptModes={},portalReads={},groups=[],groupCalls=[],granted=true,alarmState=new Map();
 const storage=area=>({async get(keys){return Object.fromEntries((Array.isArray(keys)?keys:[keys]).map(key=>[key,structuredClone(memory[area][key])]));},async set(update){Object.assign(memory[area],structuredClone(update));},async setAccessLevel(){}});
 globalThis.chrome={runtime:{id:'test-extension',getURL:path=>`chrome-extension://test-extension/${path}`,onMessage:event('message'),onStartup:event('startup')},storage:{local:storage('local'),session:storage('session')},permissions:{contains:async()=>granted},scripting:{executeScript:async options=>options.func?[{result:options.func.name==='readMultiSession'?(scriptModes[options.target.tabId]||{status:'unknown'}):options.func.name==='readPortalAccess'?(portalReads[options.target.tabId]||{status:'unknown'}):scriptIdentity}]:[]},alarms:{get:async name=>alarmState.get(name),create:async(name,value)=>alarmState.set(name,value),onAlarm:event('alarms')},windows:{update:async()=>{}},tabs:{query:async()=>openTabs,get:async id=>{const tab=openTabs.find(t=>t.id===id);if(!tab)throw new Error('Missing tab');return tab;},create:async data=>{created.push(data);const tab={id:200+created.length,windowId:1,status:'loading',...data};openTabs.push(tab);return tab;},remove:async id=>{openTabs=openTabs.filter(t=>t.id!==id);},update:async(id,data)=>{focused.push(id);const tab=openTabs.find(t=>t.id===id);Object.assign(tab,data);if(data.url)tab.status='loading';return tab;},sendMessage:async()=>({ok:true}),onRemoved:event('removed'),onUpdated:event('updated')}};
 chrome.tabGroups={query:async ({windowId})=>groups.filter(g=>g.windowId===windowId),update:async(id,props)=>{const group=groups.find(g=>g.id===id);if(!group)throw new Error('Missing group');Object.assign(group,props);return group;}};
 chrome.tabs.group=async options=>{groupCalls.push(options);let id=options.groupId;if(id==null){id=50+groups.length;groups.push({id,windowId:options.createProperties.windowId});}for(const tabId of options.tabIds)openTabs.find(t=>t.id===tabId).groupId=id;return id;};
+chrome.tabs.reload=async id=>{reloaded.push(id);};
 await import('../src/background/worker.js');
 const ui={id:'test-extension',url:'chrome-extension://test-extension/options.html',tab:{id:99}};
 const portal='https://example.awsapps.com/start/';
 const p=sanitizeProfile({portalId:portal,accountId:'111122223333',accountName:'Dev',permissionSet:'Developer',theme:'dark',favorite:true});
-function reset(){memory.local.config={...emptyConfig(),portals:[{id:portal,baseUrl:portal,label:'Work'}],profiles:[p]};memory.session={};created=[];focused=[];openTabs=[];scriptIdentity=null;scriptModes={};portalReads={};groups=[];groupCalls=[];granted=true;}
+function reset(){memory.local.config={...emptyConfig(),portals:[{id:portal,baseUrl:portal,label:'Work'}],profiles:[p]};memory.session={};created=[];focused=[];reloaded=[];openTabs=[];scriptIdentity=null;scriptModes={};portalReads={};groups=[];groupCalls=[];granted=true;}
 const completeTab=async(id,url=portal)=>{const tab=openTabs.find(t=>t.id===id);Object.assign(tab,{url,status:'complete'});await listeners.updated.at(-1)(id,{status:'complete'},tab);};
 async function startSync(){assert.equal((await send('SYNC_PORTAL',{portalId:portal})).ok,true);const id=memory.session.connections[portal].tabId;await completeTab(id);return{jobId:memory.session.draft.jobId,sender:{id:'test-extension',url:portal,tab:{id},frameId:0}};}
 const send=(type,fields={},sender=ui)=>new Promise(resolve=>listeners.message.at(-1)({type,...fields},sender,resolve));
@@ -143,6 +144,41 @@ test('background coordinator preserves trust boundaries and state',async t=>{
     assert.equal((await send('SCAN_PROGRESS',{jobId:job,progress:{accounts:1,profiles:1,pages:1}},{...sender,tab:{id:8}})).ok,false);
     assert.equal((await send('SCAN_RESULT',{jobId:job,result:{candidates:[p],warnings:[],complete:true,progress:{accounts:1,profiles:1,pages:1}}},sender)).ok,true);
     assert.equal(memory.session.draft.status,'saved');assert.equal(memory.local.config.profiles[0].theme,'dark');
+  });
+  await t.test('manual refresh reloads an open Accounts tab and keeps it for the next refresh',async()=>{
+    reset();const accounts=`${portal}#/?tab=accounts`,id=7;
+    groups=[{id:3,title:'My portal tabs',windowId:1}];
+    openTabs=[{id,windowId:1,groupId:3,url:accounts,status:'complete',active:true}];
+    assert.equal((await send('SYNC_PORTAL',{portalId:portal})).ok,true);
+    assert.deepEqual(reloaded,[id]);assert.equal(created.length,0);assert.deepEqual(groupCalls,[]);
+    assert.equal(memory.session.draft,undefined);
+    await completeTab(id,accounts);
+    const jobId=memory.session.draft.jobId;
+    openTabs[0].active=false;
+    await send('SCAN_RESULT',{jobId,result:{candidates:[p],complete:true,warnings:[],progress:{accounts:1,profiles:1,pages:1}}},{id:'test-extension',url:accounts,tab:{id},frameId:0});
+    assert.equal(openTabs[0].id,id);assert.equal(openTabs[0].groupId,3);
+    assert.equal((await send('SYNC_PORTAL',{portalId:portal})).ok,true);
+    assert.deepEqual(reloaded,[id,id]);assert.equal(created.length,0);
+  });
+  await t.test('manual refresh opens a replacement in the configured group and leaves role launch tabs alone',async()=>{
+    reset();await send('SET_TAB_GROUP',{name:'Work AWS'});
+    groups=[{id:3,title:'Work AWS',windowId:1,collapsed:true}];
+    const shortcut=`${portal}#/console?account_id=${p.accountId}&role_name=${p.permissionSet}`;
+    openTabs=[{id:7,url:shortcut,windowId:1,active:true}];
+    memory.session.connections={[portal]:{tabId:6,interactive:true,awaiting:true}};
+    assert.equal((await send('SYNC_PORTAL',{portalId:portal})).ok,true);
+    assert.deepEqual(created,[{url:`${portal}#/?tab=accounts`,active:true}]);
+    assert.deepEqual(groupCalls,[{tabIds:[201],groupId:3}]);
+    assert.equal(openTabs[0].url,shortcut);assert.equal(openTabs[1].groupId,3);assert.equal(groups[0].collapsed,false);
+  });
+  await t.test('a new manual sync can create the configured group and reuses its still-open tab after sign-in',async()=>{
+    reset();await send('SET_TAB_GROUP',{name:'AWS Work'});
+    await send('SYNC_PORTAL',{portalId:portal});
+    const id=memory.session.connections[portal].tabId;
+    assert.equal(groups[0].title,'AWS Work');assert.equal(openTabs[0].groupId,groups[0].id);
+    await completeTab(id,'https://login.microsoftonline.com/signin');
+    assert.equal((await send('SYNC_PORTAL',{portalId:portal})).ok,true);
+    assert.equal(memory.session.connections[portal].tabId,id);assert.equal(created.length,1);
   });
   await t.test('worker recreation reads saved catalog and persisted draft',async()=>{
     reset();memory.session.draft={jobId:'saved-job',status:'ready',complete:false,candidates:[p],warnings:[],progress:{accounts:1,profiles:1,pages:1}};

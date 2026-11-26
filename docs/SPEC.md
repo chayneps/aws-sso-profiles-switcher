@@ -87,10 +87,12 @@ There is no separate save step. **Show in popup** controls shortcuts independent
 from discovery, persistence, saved order, and appearance. New profiles are shown by
 default. Hiding one never deletes it or affects AWS access.
 
-Use an extension-owned sync tab and clear its filters/start from page one, leaving
-user portal tabs intact. Handle delayed role disclosure, pagination, bounded work,
-progress, and cancellation. The inactive sync tab closes after success; sign-in
-and active tabs remain open. Never launch roles or open Access keys during sync.
+For manual sync, reuse an open tab for the selected portal or create a tab in
+the configured Chrome tab group. Scheduled sync uses its own background tab.
+Clear account filters and start from page one. Handle delayed role disclosure,
+pagination, bounded work, progress, and cancellation. Close an inactive
+background sync tab after success. Keep manual and sign-in tabs open. Never
+launch roles or open Access keys during sync.
 
 An alarm checks due portals every five minutes. The default interval is 30 minutes,
 with 15 minutes, hourly, and manual-only choices. Alarms can be delayed by Chrome

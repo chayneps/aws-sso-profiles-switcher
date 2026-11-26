@@ -111,7 +111,9 @@ function renderPortals() {
     const actions = element('div', null, 'portal-actions');
     const sync = button(portal.syncStatus === 'permission-required' ? 'Grant access & sync' : portal.syncStatus === 'sign-in-required' && !uncertainSignIn ? 'Sign in & synchronise' : 'Synchronise', () => attempt(async () => {
       if (!await api.requestOrigin(portalOriginPattern(portal.id))) throw new Error('Grant portal access to synchronise. Your saved profiles are still available.');
-      await api.send('SYNC_PORTAL', {portalId:portal.id}); status('Synchronising profiles. They are saved automatically; complete portal sign-in if prompted.'); await refresh();
+      const result = await api.send('SYNC_PORTAL', {portalId:portal.id});
+      status(result.warning || 'Synchronising profiles. They are saved automatically; complete portal sign-in if prompted.', Boolean(result.warning));
+      await refresh();
     }), 'button primary');
     sync.disabled = portal.syncStatus === 'syncing';
     actions.append(intervalLabel, button('Open portal ↗', () => attempt(() => api.send('OPEN_PORTAL', {portalId:portal.id}))), sync);

@@ -3,31 +3,15 @@ import {readConsoleIdentity, resolveIdentity} from '../core/identity.js';
 import {checkMultiSession} from './multi-session.js';
 import {getSessions} from './sessions.js';
 import {readConsoleSessions} from '../core/console-sessions.js';
+import {groupAwsTab} from './tab-group.js';
 
 export function createLauncher({session}) {
-  async function group(tab, config) {
-    if (Number.isInteger(tab.groupId) && tab.groupId >= 0) {
-      await chrome.tabGroups.update(tab.groupId,{collapsed:false});
-      return;
-    }
-    const name = config.ui.tabGroupName;
-    // Query by window, then compare literally: Chrome's title query is a pattern.
-    const groups = await chrome.tabGroups.query({windowId:tab.windowId});
-    const existing = groups.find(g => g.title === name);
-    if (existing) {
-      await chrome.tabs.group({tabIds:[tab.id],groupId:existing.id});
-      await chrome.tabGroups.update(existing.id,{collapsed:false});
-    } else {
-      const id = await chrome.tabs.group({tabIds:[tab.id],createProperties:{windowId:tab.windowId}});
-      await chrome.tabGroups.update(id,{title:name,color:'orange',collapsed:false});
-    }
-  }
-  async function organize(tab, config) {
-    try { await group(tab,config); return {}; }
+  async function organize(tab, config, options) {
+    try { await groupAwsTab(tab, config.ui.tabGroupName, options); return {}; }
     catch { return {warning:'Profile opened, but Chrome could not place it in the tab group. Reload the extension and allow tab-group access.'}; }
   }
   async function focus(tab, config) {
-    const result = await organize(tab,config);
+    const result = await organize(tab,config,{preserveExisting:true});
     await chrome.tabs.update(tab.id,{active:true});
     await chrome.windows.update(tab.windowId,{focused:true});
     return {focused:true,...result};

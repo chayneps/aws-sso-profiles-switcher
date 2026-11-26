@@ -181,9 +181,10 @@ async function synchronise(portalId) {
   syncRequested = true; renderToolbar(); status('');
   try {
     if (!await api.requestOrigin(portalOriginPattern(portalId))) throw new Error('Grant portal access to synchronise.');
-    await api.send('SYNC_PORTAL', {portalId});
+    const result = await api.send('SYNC_PORTAL', {portalId});
     $('sync-panel').hidden = true;
     await refresh();
+    if (result.warning) status(result.warning, true);
   } finally { syncRequested = false; renderToolbar(); }
 }
 async function refresh() { state = await api.send('GET_STATE'); render(); }

@@ -1,13 +1,21 @@
 import {normalizePortal, mergeCandidates} from '../core/model.js';
 import {portalOriginPattern} from '../core/urls.js';
 import {readPortalAccess} from '../core/portal-access.js';
+import {groupAwsTab} from './tab-group.js';
 
 export const SYNC_ALARM = 'portal-sync-check';
 export const scanActive = draft => ['scanning', 'cancelling'].includes(draft?.status);
 const accountsUrl = portal => `${portal}#/?tab=accounts`;
 
-// All entry points are called through the worker's serialized queue. Connections
-// track only tabs created by sync; user portal tabs are never refreshed or closed.
+function isPortalHome(tab, portalId) {
+  try {
+    const url = new URL(tab.pendingUrl || tab.url);
+    return normalizePortal(url.href) === portalId && !url.search &&
+      (!url.hash || url.hash === '#/' || url.hash.startsWith('#/?'));
+  } catch { return false; }
+}
+
+// All entry points are called through the worker's serialized queue.
 export function createSync({config, store, session, notifyConsoles}) {
   async function updatePortal(portalId, fields) {
     const c = await config(), portal = c.portals.find(p => p.id === portalId);
@@ -90,21 +98,46 @@ export function createSync({config, store, session, notifyConsoles}) {
       throw new Error('Portal access is missing. Use Synchronise and grant access to reconnect.');
     }
     await updatePortal(portalId, {syncStatus: 'syncing', lastAttemptAt: Date.now(), syncMessage: 'Opening the access portal…'});
-    const all = await connections();
-    let tab;
-    if (all[portalId]) tab = await chrome.tabs.get(all[portalId].tabId).catch(() => null);
-    if (tab) {
-      all[portalId] = {...all[portalId], awaiting: true, interactive, reauthTried: false};
-      await chrome.storage.session.set({connections: all});
-      await chrome.tabs.update(tab.id, {url: accountsUrl(portalId), active: interactive});
-    } else {
-      tab = await chrome.tabs.create({url: accountsUrl(portalId), active: interactive});
-      all[portalId] = {tabId: tab.id, awaiting: true, interactive, reauthTried: false};
-      await chrome.storage.session.set({connections: all});
+    const all = await connections(), previous = all[portalId], url = accountsUrl(portalId);
+    let tab = previous && await chrome.tabs.get(previous.tabId).catch(() => null);
+    if (!tab && interactive) {
+      const candidates = (await chrome.tabs.query({url: portalOriginPattern(portalId)}))
+        .filter(candidate => isPortalHome(candidate, portalId));
+      tab = candidates.find(candidate => candidate.active) || candidates[0];
     }
-    // Covers tabs which finished loading before onUpdated reached this queue.
-    const current = await chrome.tabs.get(tab.id).catch(() => null);
-    if (current?.status === 'complete') await tabReady(tab.id, current);
+
+    let reloaded = false, warning;
+    if (tab) {
+      try {
+        if (tab.url === url && !tab.pendingUrl) {
+          if (interactive) await chrome.tabs.update(tab.id, {active: true});
+          await chrome.tabs.reload(tab.id);
+          reloaded = true;
+        } else await chrome.tabs.update(tab.id, {url, active: interactive});
+      } catch (error) {
+        // The tab may close between the lookup and navigation.
+        if (await chrome.tabs.get(tab.id).catch(() => null)) throw error;
+        tab = null;
+      }
+    }
+
+    const closeWhenDone = !interactive && (!tab || (previous?.closeWhenDone ?? (previous?.interactive === false)));
+    if (!tab) {
+      tab = await chrome.tabs.create({url, active: interactive});
+      if (interactive) {
+        try { await groupAwsTab(tab, c.ui.tabGroupName); }
+        catch { warning = 'Chrome could not put the portal tab in the configured group. Synchronisation will continue.'; }
+      }
+    }
+
+    all[portalId] = {tabId: tab.id, awaiting: true, interactive, closeWhenDone, reauthTried: false};
+    await chrome.storage.session.set({connections: all});
+    // A reload can still report the old document as complete. Wait for onUpdated.
+    if (!reloaded) {
+      const current = await chrome.tabs.get(tab.id).catch(() => null);
+      if (current?.status === 'complete') await tabReady(tab.id, current);
+    }
+    return warning ? {warning} : {};
   }
   async function finish(draft, accessUnavailable = false) {
     const cancelled = draft.status === 'cancelled';
@@ -135,8 +168,10 @@ export function createSync({config, store, session, notifyConsoles}) {
     } else {
       delete all[draft.portalId];
       await chrome.storage.session.set({connections: all});
-      const tab = await chrome.tabs.get(connection.tabId).catch(() => null);
-      if (tab && !tab.active) await chrome.tabs.remove(tab.id).catch(() => {});
+      if (connection.closeWhenDone ?? (connection.interactive === false)) {
+        const tab = await chrome.tabs.get(connection.tabId).catch(() => null);
+        if (tab && !tab.active && !tab.pendingUrl && isPortalHome(tab, draft.portalId)) await chrome.tabs.remove(tab.id).catch(() => {});
+      }
     }
   }
   async function tick() {

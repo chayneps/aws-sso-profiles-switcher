@@ -115,7 +115,7 @@ async function handle(message, sender) {
       const ui = {...c.ui,customColors:c.ui.customColors.map((color,i)=>input.ui.customColors[i]||color),accountOrder:[...new Set([...input.ui.accountOrder,...c.ui.accountOrder])]};
       await store({...c, portals, profiles,ui}); await notifyConsoles(); return {};
     }
-    case 'SYNC_PORTAL': case 'START_SCAN': { await sync.start(message.portalId); return {}; }
+    case 'SYNC_PORTAL': case 'START_SCAN': return sync.start(message.portalId);
     case 'SET_VISIBILITY': {
       const p = c.profiles.find(p => p.id === message.id);
       if (!p || typeof message.show !== 'boolean') throw new Error('Invalid profile visibility.');

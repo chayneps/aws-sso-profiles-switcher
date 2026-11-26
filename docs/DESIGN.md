@@ -153,12 +153,13 @@ Use a packaged-code-only CSP and no external scripts/fonts.
 2. A five-minute Chrome alarm selects a due portal by its persisted interval and
    last attempt. Skip manual-only, permission-required, or sign-in-required portals.
    Serialize worker actions, prohibit overlapping scans, and recreate missing alarms.
-3. Create an owned portal Accounts tab (inactive for automatic sync). Keep its ID
-   in session connections. Reuse that tab during authentication; do not refresh or
-   close a user's working portal tab. Complete navigation events drive injection.
+3. For manual sync, reuse an open Accounts or portal home tab for the selected
+   portal. Place a new manual sync tab in the configured Chrome group. For
+   automatic sync, create an inactive portal Accounts tab. Keep the tab ID in
+   session connections for authentication and inject after navigation completes.
 4. When the tab returns to the configured portal, inject the adapter. If it is at
    an identity-provider URL, only mark Sign-in required; never inspect that page.
-5. In the owned tab, clear account filters and navigate Previous back to page one.
+5. In the sync tab, clear account filters and navigate Previous back to page one.
    Expand account disclosures, wait for all delayed roles, validate same-portal
    role links, and follow pagination with cycle detection and bounded work. Do not
    click permission-set or Access keys links. An explicit empty accounts table is
@@ -168,11 +169,11 @@ Use a packaged-code-only CSP and no external scripts/fonts.
    discoveries. Preserve visibility and appearance by stable ID. A cancelled or
    failed scan cannot invalidate the prior inventory. Complete absence marks an
    assignment not-seen; keep its settings and omit it from the picker.
-7. For unavailable access, navigate the owned tab to the normal portal once to
+7. For unavailable access, navigate the sync tab to the normal portal once to
    attempt SSO renewal. Then wait for normal user sign-in/MFA and resume on return.
    Scheduled retries pause while sign-in is required; manual Sign in & synchronise
    focuses/reuses the tracked tab. Keep the previous catalog throughout.
-8. Close only an inactive, owned successful-sync tab. Keep active and sign-in tabs.
+8. Close an inactive background sync tab after success. Keep manual and sign-in tabs.
    Mark stale/closed/navigated jobs interrupted and discard stale reports. Local
    sync status survives reload; session connections may be recreated on next sync.
 9. Manage shows the full catalog and a per-profile Show in popup checkbox. Popup

@@ -84,10 +84,11 @@ is closed. **Manual only** disables periodic profile sync too. Opening the popup
 or Manage never requests a new sync; connecting a new portal still starts its
 initial sync.
 
-Sync uses its own portal tab so filters or pagination in your working portal tab
-are not disturbed. It clears filters and returns to page one in that sync tab,
-expands rows, and reads all available account/permission-set links. An inactive
-sync tab is closed after success. Tabs that need sign-in stay open, with a
+Manual sync reuses an open tab for the selected portal. If it needs a new tab,
+it opens it in the Chrome tab group named under **Manage → Console tabs**.
+Sync clears filters, returns to page one, expands rows, and reads available
+account/permission-set links. Scheduled sync uses a background tab and closes it
+after success if it is inactive. Tabs that need sign-in stay open, with a
 **Sign in & synchronise** action in Manage. A normal portal navigation can renew
 an existing SSO sign-in; Microsoft credentials/MFA are completed by you. Failed
 access pauses repeated automatic attempts until you reconnect. The extension
