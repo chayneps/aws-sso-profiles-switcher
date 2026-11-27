@@ -1,58 +1,75 @@
 # AWS SSO Profiles Switcher
 
-The popup shows the detected session count out of AWS's five-session limit on
-the same line as PROFILES and its catalog count.
-An orange dot at the end of a profile row indicates an existing native AWS session.
-Hover or keyboard-focus the dot to reveal ×, then click to sign out that session.
-This affects all tabs for that session; it does not delete the saved profile.
-Closing uses AWS's own exact session sign-out link in a temporary background tab.
-Your working tabs stay open. Errors remain in the popup. The count drops only
-after a fresh AWS registry confirms removal; an unconfirmed request stays counted.
-Chrome may prevent confirmation after the last session signs out because the
-extension cannot read the sign-in site. Temporary tabs are cleaned up either way.
-Click the session count to open a floating list, including sessions whose profiles
-are hidden or unsaved. It overlays the tiles without moving them. Escape, clicking
-outside, or the close button dismisses it; long session lists scroll within it.
-At capacity, opening a new identity shows a close-session prompt. Existing tabs
-and existing native sessions can still be opened. In-flight sign-ins reserve slots.
-The list refreshes on popup open/focus and every 30 seconds while visible, without
-synchronising the portal. With no readable native registry, the count is marked
-“detected”; it may omit sessions that AWS still retains. AWS enforces the final limit.
+Find your AWS IAM Identity Center accounts and permission sets, switch between
+open consoles, and give each profile a distinct theme and color. The extension
+uses your regular AWS access portal sign-in.
 
-Current release: **v1** (`1.0.0`). The version stays fixed unless explicitly changed by the user.
-
-The interface uses an orange-and-black theme in light and dark mode. New profiles
-default to the Blue preset; each profile's saved color remains independently configurable.
-
-A Chrome Manifest V3 extension for finding AWS account/permission-set profiles,
-opening their SSO consoles, and giving each profile a light, dark, or system theme
-and accent color. The compact picker takes interaction inspiration from
-[AWS Extend Switch Roles](https://github.com/tilfinltd/aws-extend-switch-roles).
-
-This is a locally built portal-first MVP. Automated checks and the sample-data UI preview pass;
-installed Chrome/AWS integration still needs the smoke test below. See
-[validation results](docs/VALIDATION.md), [specification](docs/SPEC.md), and
-[technical and UI design](docs/DESIGN.md).
+**Version** 1.0.0 · Chrome 114+
 
 ## Install locally
 
-Requires Node.js 20+ for building and Chrome 114+ for the extension.
+You need **Chrome 114 or later** and **Node.js 20 or later** with npm.
 
-```sh
-npm ci
-npm test
-npm run build
-```
+1. [Download the source ZIP](https://github.com/chayneps/aws-sso-profiles-switcher/archive/refs/heads/main.zip),
+   extract it, and open a terminal in the extracted folder. To use Git, run
+   these commands.
 
-1. Open `chrome://extensions` in Chrome and enable **Developer mode**.
-2. Choose **Load unpacked** and select this project's `dist` folder:
-   `dist/`.
-3. Pin **AWS SSO Profiles Switcher**, open its popup, and choose **Manage profiles** (gear icon).
-4. Refresh existing AWS console tabs so the newly installed content script runs.
+   ```sh
+   git clone https://github.com/chayneps/aws-sso-profiles-switcher.git
+   cd aws-sso-profiles-switcher
+   ```
 
-After source changes, run `npm run build`, reload the extension in Chrome, and
-refresh the portal/console tabs. Load `dist`, not the project root: bundled files
-are generated there. No Chrome Web Store publication is required for local use.
+2. Build the extension from that folder.
+
+   ```sh
+   npm ci
+   npm run build
+   ```
+
+3. In Chrome, enter `chrome://extensions` in the address bar. Enable
+   **Developer mode**, choose **Load unpacked**, and select the generated
+   **`dist`** folder. It contains the bundled files and `manifest.json`.
+4. Open Chrome’s **Extensions** menu and pin **AWS SSO Profiles Switcher**.
+   Open the extension, choose **Manage profiles** (the gear icon), and paste
+   your AWS access portal URL. Choose **Connect portal** and complete your
+   usual sign-in and MFA if prompted. The extension imports your profiles
+   automatically.
+
+To update an unpacked installation, rebuild in the same checkout, click
+**Reload** on the extension card, and refresh any AWS console tabs you already
+have open. See [Chrome’s unpacked extension guide](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked).
+
+## Feature tour
+
+These screenshots use sample accounts from the local preview.
+
+### Switch profiles and see active sessions
+
+Search by account name, account number, or permission set. Click a profile
+to focus its existing console tab or open a new one in your configured Chrome
+tab group. The orange dot identifies an active AWS session. Click the session
+count to see the session list. Enable AWS multi-session to keep multiple
+identities open together.
+
+![Popup showing account groups, colored profile accents, and two active AWS sessions](docs/readme/profile-picker.png)
+
+### Sync your portal and organise profiles
+
+Connect a portal in **Manage**, then use **Synchronise** to refresh your
+accounts and permission sets. Choose which profiles appear in the popup, drag
+account headers to reorder them, and set each profile’s color, theme, label,
+and preferred region.
+
+![Settings showing portal sync, the Chrome tab group name, and grouped profile cards](docs/readme/profile-settings.png)
+
+### Recognise the AWS console at a glance
+
+A matched console uses your profile color for the account control, the thin
+strip across the top, and the thought-cloud tab icon. Choose **Light**,
+**Dark**, or **System** for supported console pages. The screenshot uses the
+extension’s actual appearance adapter on a sample console header.
+
+![Sample AWS console header with a colored top strip and account control, plus the matching tab icon](docs/readme/console-accent.png)
 
 ## Connect and synchronise your portal
 
@@ -64,7 +81,6 @@ opens. Portal setup and detailed sync settings live in Manage. A readable open
 Accounts page clears a stale saved sign-in warning without starting sync.
 Reconnect appears only for observed sign-in/expiry UI; unconfirmed sync failures
 offer Retry. Chrome host-permission failures offer Grant access.
-
 
 1. Open **Manage**. **AWS access portal** is the first setup section.
 2. Enter your portal URL and an optional name, then choose **Connect portal**.
@@ -180,6 +196,27 @@ components, and embedded frames may retain native styling. The extension does
 not save global AWS appearance preferences. Unknown or ambiguous identities are
 left unstyled; an identical account/role listed under multiple portals is ambiguous.
 
+## Manage active AWS sessions
+
+The popup shows the detected session count out of AWS's five-session limit on
+the same line as PROFILES and its catalog count.
+An orange dot at the end of a profile row indicates an existing native AWS session.
+Hover or keyboard-focus the dot to reveal ×, then click to sign out that session.
+This affects all tabs for that session; it does not delete the saved profile.
+Closing uses AWS's own exact session sign-out link in a temporary background tab.
+Your working tabs stay open. Errors remain in the popup. The count drops only
+after a fresh AWS registry confirms removal; an unconfirmed request stays counted.
+Chrome may prevent confirmation after the last session signs out because the
+extension cannot read the sign-in site. Temporary tabs are cleaned up either way.
+Click the session count to open a floating list, including sessions whose profiles
+are hidden or unsaved. It overlays the tiles without moving them. Escape, clicking
+outside, or the close button dismisses it; long session lists scroll within it.
+At capacity, opening a new identity shows a close-session prompt. Existing tabs
+and existing native sessions can still be opened. In-flight sign-ins reserve slots.
+The list refreshes on popup open/focus and every 30 seconds while visible, without
+synchronising the portal. With no readable native registry, the count is marked
+“detected”; it may omit sessions that AWS still retains. AWS enforces the final limit.
+
 ## Import/export configuration
 
 Manage → Import & export accepts exported JSON and AWS SSO INI configuration,
@@ -229,8 +266,8 @@ preview tools are under `scripts/`. `scripts/demo.js` is never packaged in `dist
 ## Chrome/AWS smoke test still required
 
 1. Load `dist`; confirm no extension errors and grant access to your portal.
-2. Synchronise from the authenticated Accounts page and compare the saved catalog to the
-   portal. The inspected portal had 28 accounts and 29 account/role pairs.
+2. Synchronise from the authenticated Accounts page and compare the saved accounts
+   and permission sets with the portal.
 3. Hide one profile, change its appearance, and synchronise again; confirm both preferences survive. Reload the extension and verify the entire catalog remains.
 4. With only the access portal open, verify that unknown multi-session status
    leaves tiles clickable. Enable multi-session in AWS for simultaneous accounts;
@@ -253,5 +290,7 @@ frames may retain their own theme. GovCloud and China partitions are outside thi
 
 ## Attribution
 
-See [third-party notices](THIRD_PARTY_NOTICES.md). This is an independent project,
-not affiliated with Amazon Web Services or AWS Extend Switch Roles.
+The compact picker takes inspiration from [AWS Extend Switch Roles](https://github.com/tilfinltd/aws-extend-switch-roles).
+See [third-party notices](THIRD_PARTY_NOTICES.md), the [specification](docs/SPEC.md),
+the [design](docs/DESIGN.md), and the [validation notes](docs/VALIDATION.md).
+This is an independent project.
